@@ -2,18 +2,37 @@ import cntk as C
 import numpy as np
 from PIL import Image
 from IPython.core.display import display
+import face_recognition
 
 emotion_table = {'neutral':0, 'happiness':1, 'surprise':2, 'sadness':3, 'anger':4, 'disgust':5, 'fear':6, 'contempt':7}
 
 def preprocess(image_path):
   input_shape = (1, 1, 64, 64)
-  img = Image.open(image_path)
-  img = img.resize((64, 64), Image.ANTIALIAS)
-  rgb_img = np.asarray(img, dtype=np.float32) - 128
-  bgr_img = rgb_img[..., [2,1,0]]
-  img_data = np.ascontiguousarray(np.rollaxis(bgr_img,2))
-  img_data = np.resize(img_data, input_shape)
-  return img_data
+  image = face_recognition.load_image_file(image_path)
+  # Find all the faces in the image using the default HOG-based model.
+  # This method is fairly accurate, but not as accurate as the CNN model and not GPU accelerated.
+  # See also: find_faces_in_picture_cnn.py
+  face_locations = face_recognition.face_locations(image)
+  print("I found {} face(s) in this photograph.".format(len(face_locations)))
+
+  if len(face_locations) > 0:
+    face_location = face_locations[0]
+    # Print the location of each face in this image
+    top, right, bottom, left = face_location
+    print("A face is located at pixel location Top: {}, Left: {}, Bottom: {}, Right: {}".format(top, left, bottom, right))
+
+    # You can access the actual face itself like this:
+    face_image = image[top:bottom, left:right]
+    pil_image = Image.fromarray(face_image)
+    pil_image.show()  
+
+    img = pil_image.resize((64, 64), Image.ANTIALIAS)
+    rgb_img = np.asarray(img, dtype=np.float32) - 128
+    bgr_img = rgb_img[..., [2,1,0]]
+    img_data = np.ascontiguousarray(np.rollaxis(bgr_img,2))
+    img_data = np.resize(img_data, input_shape)
+    return img_data
+  
 
 def softmax(x):
     """Compute softmax values for each sets of scores in x."""
@@ -33,7 +52,7 @@ def postprocess(scores):
   return classes
 
 z = C.Function.load("emotion_ferplus/model.onnx", device=C.device.cpu(), format=C.ModelFormat.ONNX)
-img_data = preprocess("assets/angry2.jpg")
+img_data = preprocess("assets/happy.jpg")
 display(img_data) #show the image
 scores = z.eval(img_data)
 print(scores)
